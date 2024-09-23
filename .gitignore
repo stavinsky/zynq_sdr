@@ -20,4 +20,6 @@
 .vitisWorkspace.json
 _ide/
 .cache/
-.vscode/
+src/compile_commands.json
+compile_commands.json
+src/CMakeLists.txt
