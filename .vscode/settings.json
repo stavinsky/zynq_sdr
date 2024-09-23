@@ -1,0 +1,9 @@
+{
+    "cmake.sourceDirectory": "/home/dev/dev/workspace/lwip_echo_server/src",
+    "files.associations": {
+        "platform.h": "c",
+        "xadapter.h": "c",
+        "xparameters.h": "c",
+        "tcp.h": "c"
+    }
+}

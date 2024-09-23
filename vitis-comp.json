@@ -1,0 +1,15 @@
+{
+  "name": "lwip_echo_server",
+  "type": "HOST",
+  "platform": "/home/dev/dev/workspace/dds_dma_platform/export/dds_dma_platform/dds_dma_platform.xpfm",
+  "domain": "standalone_ps7_cortexa9_0",
+  "cpuInstance": "ps7_cortexa9_0",
+  "cpuType": "cortex-a9",
+  "os": "standalone",
+  "configuration": {
+    "componentType": "HOST",
+    "hostToolchainConfigurations": []
+  },
+  "domainRealName": "standalone_ps7_cortexa9_0",
+  "applicationFlow": "EMBEDDED"
+}
