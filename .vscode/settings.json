@@ -4,6 +4,8 @@
         "platform.h": "c",
         "xadapter.h": "c",
         "xparameters.h": "c",
-        "tcp.h": "c"
+        "tcp.h": "c",
+        "platform_config.h": "c",
+        "xil_printf.h": "c"
     }
 }
