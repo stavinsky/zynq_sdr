@@ -4,6 +4,7 @@
 #include "xil_printf.h"
 #include "xparameters.h"
 #include <stdio.h>
+#include <xil_types.h>
 
 #include "lwip/dhcp.h"
 #include "lwip/tcp.h"
@@ -20,6 +21,7 @@ extern volatile u32 RxDone;
 extern volatile int TcpFastTmrFlag;
 extern volatile int TcpSlowTmrFlag;
 extern struct netif *echo_netif;
+
 int main() {
   int status = 0;
 
@@ -44,10 +46,7 @@ int main() {
       TcpSlowTmrFlag = 0;
     }
     xemacif_input(echo_netif);
-    if (RxDone) {
-        RxDone = 0;
-      tcp_transfer();
-    }
+    tcp_transfer();
   }
 
   cleanup_platform();

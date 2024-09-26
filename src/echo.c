@@ -1,32 +1,46 @@
+#include "platform.h"
 #include "platform_config.h"
 #include <stdio.h>
 #include <string.h>
+#include <xil_cache.h>
+#include <xil_types.h>
 
 #include "lwip/err.h"
 #include "lwip/tcp.h"
 #include "xil_printf.h"
 
 void lwip_init();
-
+void init_platform(void);
 static struct netif server_netif;
 struct netif *echo_netif;
 static struct tcp_pcb *current_pcb;
 extern volatile int dhcp_timoutcntr;
-extern volatile int tcp_data_sent = 0;
-extern u16 *RxBufferPtr;
-extern volatile u32 transfered_bytes;
-int dma_transfer_start(void);
+extern volatile int tcp_data_sent;
+extern volatile uint32_t transfered_bytes;
+extern u16* current_buffer;
+
+int dma_transfer_start();
 void tcp_transfer() {
   if (!current_pcb) {
     return;
   }
+  if (!current_buffer) {
+      dma_transfer_start();
+      return;
+  }
+
   if (transfered_bytes == 0) {
     return;
   }
   if (tcp_sndbuf(current_pcb) < transfered_bytes ) {
+      return;
     tcp_output(current_pcb);
   } 
-    tcp_write(current_pcb, (const char *)RxBufferPtr, transfered_bytes , 0x1 |0x2 );
+    // Xil_DCacheFlushRange((INTPTR)current_buffer, transfered_bytes);
+    // Xil_DCacheInvalidateRange((INTPTR)current_buffer, transfered_bytes);
+    const char * buff = (const char *)current_buffer;
+    u32 bytes_to_trasfer  = transfered_bytes;
+    tcp_write(current_pcb, buff, bytes_to_trasfer, 0x0 );
     dma_transfer_start();
 }
 int tcp_init_and_dhcp() {
@@ -116,7 +130,6 @@ err_t accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err) {
 
   /* increment for subsequent accepted connections */
   connection++;
-  dma_transfer_start();
   return ERR_OK;
 }
 

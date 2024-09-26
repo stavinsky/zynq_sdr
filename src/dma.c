@@ -5,6 +5,7 @@
 #include "xinterrupt_wrap.h"
 #include "xparameters.h"
 #include <xil_io.h>
+#include <xil_types.h>
 #include "xil_printf.h"
 
 #define MEM_BASE_ADDR 0x01000000
@@ -20,11 +21,16 @@ static XAxiDma AxiDma; /* Instance of the XAxiDma */
 volatile u32 RxDone;
 volatile u32 Error;
 volatile u32 transfered_bytes = 0;
-u16 *RxBufferPtr = (u16 *)RX_BUFFER_BASE;
+u16 *current_buffer;
+u16 *RxBufferPtr1 ;
+u16 *RxBufferPtr2 ;
+
 XAxiDma_Config *Config;
 int setup_dds_dma_and_interrupts() {
+  Xil_DCacheDisable();
   int Status;
-
+  RxBufferPtr1 = (u16*)malloc(MAX_PKT_LEN);
+  RxBufferPtr2 = (u16*)malloc(MAX_PKT_LEN);
   Config = XAxiDma_LookupConfig(XPAR_XAXIDMA_0_BASEADDR);
   if (!Config) {
     xil_printf("No config found for %d\r\n", XPAR_XAXIDMA_0_BASEADDR);
@@ -54,17 +60,25 @@ int setup_dds_dma_and_interrupts() {
   return 0;
 }
 
-int reset_irq() {
-  XDisconnectInterruptCntrl(Config->IntrId[0], Config->IntrParent);
-}
+// int reset_irq() {
+//   XDisconnectInterruptCntrl(Config->IntrId[0], Config->IntrParent);
+// }
 int dma_transfer_start() {
   int status;
   transfered_bytes = 0;
-  Xil_DCacheFlushRange((UINTPTR)RxBufferPtr, MAX_PKT_LEN );
+//   if (!current_buffer) {current_buffer = RxBufferPtr1;}
+  if ((!current_buffer) || (current_buffer == RxBufferPtr2)) {
+      current_buffer = RxBufferPtr1;
+  } 
+  else {
+      current_buffer = RxBufferPtr2;
+  }
+
+//   Xil_DCacheFlushRange((UINTPTR)current_buffer, MAX_PKT_LEN );
   /* Initialize flags before start transfer test  */
   RxDone = 0;
   Error = 0;
-  status = XAxiDma_SimpleTransfer(&AxiDma, (UINTPTR)RxBufferPtr, 
+  status = XAxiDma_SimpleTransfer(&AxiDma, (UINTPTR)current_buffer, 
                                   MAX_PKT_LEN, XAXIDMA_DEVICE_TO_DMA);
   if (status != XST_SUCCESS) {
     return XST_FAILURE;
@@ -76,7 +90,7 @@ static void RxIntrHandler(void *Callback) {
   u32 IrqStatus;
   int TimeOut;
   XAxiDma *AxiDmaInst = (XAxiDma *)Callback;
-  transfered_bytes = Xil_In32(XPAR_XAXIDMA_0_BASEADDR + 0x58);
+//   transfered_bytes = Xil_In32(XPAR_XAXIDMA_0_BASEADDR + 0x58);
   /* Read pending interrupts */
   IrqStatus = XAxiDma_IntrGetIrq(AxiDmaInst, XAXIDMA_DEVICE_TO_DMA);
 
@@ -113,7 +127,10 @@ static void RxIntrHandler(void *Callback) {
    * If completion interrupt is asserted, then set RxDone flag
    */
   if ((IrqStatus & XAXIDMA_IRQ_IOC_MASK)) {
-    Xil_DCacheFlushRange((UINTPTR)RxBufferPtr, transfered_bytes);
+    //Xil_DCacheFlushRange((UINTPTR)RxBufferPtr, transfered_bytes);
+    // Xil_DCacheInvalidateRange((UINTPTR)current_buffer, MAX_PKT_LEN);
+
+    transfered_bytes = Xil_In32(XPAR_XAXIDMA_0_BASEADDR + 0x58);
     RxDone = 1;
   }
 }
