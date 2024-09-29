@@ -6,6 +6,9 @@
         "xparameters.h": "c",
         "tcp.h": "c",
         "platform_config.h": "c",
-        "xil_printf.h": "c"
-    }
+        "xil_printf.h": "c",
+        "stdio.h": "c"
+    },
+    "C_Cpp.clang_format_fallbackStyle": "LLVM",
+
 }

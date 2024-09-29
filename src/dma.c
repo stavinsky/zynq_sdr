@@ -1,17 +1,17 @@
 #include "xaxidma.h"
 #include "xdebug.h"
 #include "xil_exception.h"
+#include "xil_printf.h"
 #include "xil_util.h"
 #include "xinterrupt_wrap.h"
 #include "xparameters.h"
 #include <xil_io.h>
 #include <xil_types.h>
-#include "xil_printf.h"
 
 #define MEM_BASE_ADDR 0x01000000
 #define RX_BUFFER_BASE (MEM_BASE_ADDR + 0x00300000)
 #define RESET_TIMEOUT_COUNTER 10000
-#define MAX_PKT_LEN (10000)
+#define MAX_PKT_LEN (20000)
 #define POLL_TIMEOUT_COUNTER 1000000U
 #define NUMBER_OF_EVENTS 1
 
@@ -22,15 +22,15 @@ volatile u32 RxDone;
 volatile u32 Error;
 volatile u32 transfered_bytes = 0;
 u16 *current_buffer;
-u16 *RxBufferPtr1 ;
-u16 *RxBufferPtr2 ;
+u16 *RxBufferPtr1[MAX_PKT_LEN] __attribute__((aligned(32)));
+u16 *RxBufferPtr2[MAX_PKT_LEN] __attribute__((aligned(32)));
 
 XAxiDma_Config *Config;
 int setup_dds_dma_and_interrupts() {
-  Xil_DCacheDisable();
+    // Xil_DCacheDisable();
   int Status;
-  RxBufferPtr1 = (u16*)malloc(MAX_PKT_LEN);
-  RxBufferPtr2 = (u16*)malloc(MAX_PKT_LEN);
+//   RxBufferPtr1 = (u16 *)malloc(MAX_PKT_LEN);
+//   RxBufferPtr2 = (u16 *)malloc(MAX_PKT_LEN);
   Config = XAxiDma_LookupConfig(XPAR_XAXIDMA_0_BASEADDR);
   if (!Config) {
     xil_printf("No config found for %d\r\n", XPAR_XAXIDMA_0_BASEADDR);
@@ -47,7 +47,6 @@ int setup_dds_dma_and_interrupts() {
     xil_printf("Device configured as SG mode \r\n");
     return XST_FAILURE;
   }
-
 
   Status =
       XSetupInterruptSystem(&AxiDma, &RxIntrHandler, Config->IntrId[0],
@@ -66,31 +65,31 @@ int setup_dds_dma_and_interrupts() {
 int dma_transfer_start() {
   int status;
   transfered_bytes = 0;
-//   if (!current_buffer) {current_buffer = RxBufferPtr1;}
+  //   if (!current_buffer) {current_buffer = RxBufferPtr1;}
   if ((!current_buffer) || (current_buffer == RxBufferPtr2)) {
-      current_buffer = RxBufferPtr1;
-  } 
-  else {
-      current_buffer = RxBufferPtr2;
+    current_buffer = RxBufferPtr1;
+  } else {
+    current_buffer = RxBufferPtr2;
   }
 
-//   Xil_DCacheFlushRange((UINTPTR)current_buffer, MAX_PKT_LEN );
+// Xil_DCacheFlushRange((UINTPTR)current_buffer, MAX_PKT_LEN );
   /* Initialize flags before start transfer test  */
   RxDone = 0;
   Error = 0;
-  status = XAxiDma_SimpleTransfer(&AxiDma, (UINTPTR)current_buffer, 
-                                  MAX_PKT_LEN, XAXIDMA_DEVICE_TO_DMA);
+  status = XAxiDma_SimpleTransfer(&AxiDma, (UINTPTR)current_buffer, MAX_PKT_LEN,
+                                  XAXIDMA_DEVICE_TO_DMA);
   if (status != XST_SUCCESS) {
     return XST_FAILURE;
   }
   // Xil_DCacheFlushRange((UINTPTR)RxBufferPtr, MAX_PKT_LEN);
+  return 0;
 }
 
 static void RxIntrHandler(void *Callback) {
   u32 IrqStatus;
   int TimeOut;
   XAxiDma *AxiDmaInst = (XAxiDma *)Callback;
-//   transfered_bytes = Xil_In32(XPAR_XAXIDMA_0_BASEADDR + 0x58);
+  //   transfered_bytes = Xil_In32(XPAR_XAXIDMA_0_BASEADDR + 0x58);
   /* Read pending interrupts */
   IrqStatus = XAxiDma_IntrGetIrq(AxiDmaInst, XAXIDMA_DEVICE_TO_DMA);
 
@@ -127,8 +126,8 @@ static void RxIntrHandler(void *Callback) {
    * If completion interrupt is asserted, then set RxDone flag
    */
   if ((IrqStatus & XAXIDMA_IRQ_IOC_MASK)) {
-    //Xil_DCacheFlushRange((UINTPTR)RxBufferPtr, transfered_bytes);
-    // Xil_DCacheInvalidateRange((UINTPTR)current_buffer, MAX_PKT_LEN);
+    // Xil_DCacheFlushRange((UINTPTR)RxBufferPtr, transfered_bytes);
+    //  Xil_DCacheInvalidateRange((UINTPTR)current_buffer, MAX_PKT_LEN);
 
     transfered_bytes = Xil_In32(XPAR_XAXIDMA_0_BASEADDR + 0x58);
     RxDone = 1;

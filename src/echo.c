@@ -28,20 +28,17 @@ void tcp_transfer() {
       dma_transfer_start();
       return;
   }
-
   if (transfered_bytes == 0) {
     return;
   }
   if (tcp_sndbuf(current_pcb) < transfered_bytes ) {
       return;
-    tcp_output(current_pcb);
   } 
-    // Xil_DCacheFlushRange((INTPTR)current_buffer, transfered_bytes);
-    // Xil_DCacheInvalidateRange((INTPTR)current_buffer, transfered_bytes);
-    const char * buff = (const char *)current_buffer;
-    u32 bytes_to_trasfer  = transfered_bytes;
-    tcp_write(current_pcb, buff, bytes_to_trasfer, 0x0 );
+    u32 bytes = transfered_bytes;
+    u16 *buff = current_buffer;
     dma_transfer_start();
+    Xil_DCacheInvalidateRange((UINTPTR)buff, bytes);
+    tcp_write(current_pcb, buff, bytes, 0x1 );
 }
 int tcp_init_and_dhcp() {
   ip_addr_t ipaddr, netmask, gw;
