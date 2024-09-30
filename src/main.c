@@ -21,6 +21,9 @@ extern volatile u32 RxDone;
 extern volatile int TcpFastTmrFlag;
 extern volatile int TcpSlowTmrFlag;
 extern struct netif *echo_netif;
+int dma_transfer_start();
+
+
 
 int main() {
   int status = 0;
@@ -47,6 +50,7 @@ int main() {
     }
     xemacif_input(echo_netif);
     tcp_transfer();
+    // dma_transfer_start();
   }
 
   cleanup_platform();

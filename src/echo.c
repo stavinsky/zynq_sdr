@@ -1,5 +1,7 @@
+#include "buffer/tcp_buffer.h"
 #include "platform.h"
 #include "platform_config.h"
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <xil_cache.h>
@@ -8,6 +10,7 @@
 #include "lwip/err.h"
 #include "lwip/tcp.h"
 #include "xil_printf.h"
+#include "buffer/tcp_buffer.h"
 
 void lwip_init();
 void init_platform(void);
@@ -20,25 +23,33 @@ extern volatile uint32_t transfered_bytes;
 extern u16* current_buffer;
 
 int dma_transfer_start();
+#define psize (width) 
+uint16_t buff[psize] = {};
+// void tcp_transfer() {
+//   if (!current_pcb) {
+//     return;
+//   }
+//   int buff_size = tcp_sndbuf(current_pcb);
+//   if ( buff_size >= psize) {
+//     tcp_write(current_pcb, buff, psize, 1 );
+//     // tcp_output(current_pcb);
+//   }  
+// }
 void tcp_transfer() {
   if (!current_pcb) {
     return;
-  }
-  if (!current_buffer) {
-      dma_transfer_start();
-      return;
-  }
-  if (transfered_bytes == 0) {
-    return;
-  }
-  if (tcp_sndbuf(current_pcb) < transfered_bytes ) {
-      return;
   } 
-    u32 bytes = transfered_bytes;
-    u16 *buff = current_buffer;
-    dma_transfer_start();
-    Xil_DCacheInvalidateRange((UINTPTR)buff, bytes);
-    tcp_write(current_pcb, buff, bytes, 0x1 );
+  if (tcp_sndbuf(current_pcb) < width ) {
+      return;
+  }  
+  buffer_read_result res = buffer_read();
+
+  if (!res.buffer) {
+      return;
+  }
+
+    Xil_DCacheInvalidateRange((UINTPTR)res.buffer, res.bytes);
+    tcp_write(current_pcb, res.buffer, res.bytes, TCP_WRITE_FLAG_COPY);
 }
 int tcp_init_and_dhcp() {
   ip_addr_t ipaddr, netmask, gw;
@@ -91,6 +102,11 @@ int tcp_init_and_dhcp() {
   print_ip_settings(&ipaddr, &netmask, &gw);
   return 0;
 }
+err_t sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
+    buffer_release_bytes(len);
+    dma_transfer_start();
+    return ERR_OK;
+}
 
 err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
                     err_t err) {
@@ -99,6 +115,7 @@ err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
     tcp_close(tpcb);
     tcp_recv(tpcb, NULL);
     current_pcb = NULL;
+    buffer_reset();
     return ERR_OK;
   }
 
@@ -120,13 +137,16 @@ err_t accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err) {
   current_pcb = newpcb;
   /* set the receive callback for this connection */
   tcp_recv(newpcb, recv_callback);
-
+  tcp_sent(newpcb, sent_callback);
   /* just use an integer number indicating the connection id as the
      callback argument */
   tcp_arg(newpcb, (void *)(UINTPTR)connection);
-
+    dma_transfer_start();
   /* increment for subsequent accepted connections */
   connection++;
+//   for(unsigned int i = 0; i <= psize; i++) {
+//       buff[i] = i;
+//   }
   return ERR_OK;
 }
 

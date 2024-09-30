@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "basic.h": "c",
+        "stddef.h": "c",
+        "stdbool.h": "c",
+        "tcp_buffer.h": "c"
+    },
+    "cmake.buildDirectory": "${workspaceFolder}/build",
+    "C_Cpp.clang_format_fallbackStyle": "LLVM"
+}

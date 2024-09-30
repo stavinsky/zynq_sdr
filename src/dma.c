@@ -7,6 +7,7 @@
 #include "xparameters.h"
 #include <xil_io.h>
 #include <xil_types.h>
+#include "buffer/tcp_buffer.h"
 
 #define MEM_BASE_ADDR 0x01000000
 #define RX_BUFFER_BASE (MEM_BASE_ADDR + 0x00300000)
@@ -21,12 +22,13 @@ static XAxiDma AxiDma; /* Instance of the XAxiDma */
 volatile u32 RxDone;
 volatile u32 Error;
 volatile u32 transfered_bytes = 0;
-u16 *current_buffer;
-u16 *RxBufferPtr1[MAX_PKT_LEN] __attribute__((aligned(32)));
-u16 *RxBufferPtr2[MAX_PKT_LEN] __attribute__((aligned(32)));
+// u16 *current_buffer;
+// u16 *RxBufferPtr1[MAX_PKT_LEN] __attribute__((aligned(32)));
+// u16 *RxBufferPtr2[MAX_PKT_LEN] __attribute__((aligned(32)));
 
 XAxiDma_Config *Config;
 int setup_dds_dma_and_interrupts() {
+    buffer_reset();
     // Xil_DCacheDisable();
   int Status;
 //   RxBufferPtr1 = (u16 *)malloc(MAX_PKT_LEN);
@@ -63,15 +65,13 @@ int setup_dds_dma_and_interrupts() {
 //   XDisconnectInterruptCntrl(Config->IntrId[0], Config->IntrParent);
 // }
 int dma_transfer_start() {
+
   int status;
   transfered_bytes = 0;
-  //   if (!current_buffer) {current_buffer = RxBufferPtr1;}
-  if ((!current_buffer) || (current_buffer == RxBufferPtr2)) {
-    current_buffer = RxBufferPtr1;
-  } else {
-    current_buffer = RxBufferPtr2;
+  u16 * current_buffer = buffer_reserve_wr();
+  if (!current_buffer) {
+      return 0;
   }
-
 // Xil_DCacheFlushRange((UINTPTR)current_buffer, MAX_PKT_LEN );
   /* Initialize flags before start transfer test  */
   RxDone = 0;
@@ -131,5 +131,6 @@ static void RxIntrHandler(void *Callback) {
 
     transfered_bytes = Xil_In32(XPAR_XAXIDMA_0_BASEADDR + 0x58);
     RxDone = 1;
+    buffer_done_wr(transfered_bytes);
   }
 }
