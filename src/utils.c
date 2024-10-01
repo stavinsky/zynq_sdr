@@ -1,4 +1,5 @@
 #include "lwip/tcp.h"
+#include "xil_printf.h"
 
 void print_ip(char *msg, ip_addr_t *ip)
 {

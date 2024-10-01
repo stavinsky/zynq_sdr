@@ -65,7 +65,6 @@ int setup_dds_dma_and_interrupts() {
 //   XDisconnectInterruptCntrl(Config->IntrId[0], Config->IntrParent);
 // }
 int dma_transfer_start() {
-
   int status;
   transfered_bytes = 0;
   u16 * current_buffer = buffer_reserve_wr();

@@ -8,21 +8,18 @@
 
 #include "lwip/dhcp.h"
 #include "lwip/tcp.h"
-#include "xil_cache.h"
+#include "tcp_setup.h"
+#include "tcp_callbacks.h"
 
-int start_application(void);
-int tcp_init_and_dhcp(void);
 void tcp_fasttmr(void);
 void tcp_slowtmr(void);
 int setup_dds_dma_and_interrupts(void);
-void tcp_transfer(void);
 err_t dhcp_start(struct netif *netif);
 extern volatile u32 RxDone;
 extern volatile int TcpFastTmrFlag;
 extern volatile int TcpSlowTmrFlag;
 extern struct netif *echo_netif;
 int dma_transfer_start();
-
 
 
 int main() {
@@ -49,8 +46,8 @@ int main() {
       TcpSlowTmrFlag = 0;
     }
     xemacif_input(echo_netif);
-    tcp_transfer();
-    // dma_transfer_start();
+    dma_transfer_start();
+    // tcp_transfer();
   }
 
   cleanup_platform();
