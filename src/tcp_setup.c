@@ -57,7 +57,7 @@ int tcp_init_and_dhcp() {
   print_ip_settings(&ipaddr, &netmask, &gw);
   return 0;
 }
-int start_application() {
+int start_tcp_server() {
   struct tcp_pcb *pcb;
   err_t err;
   unsigned port = 7;

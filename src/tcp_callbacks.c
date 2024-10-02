@@ -11,7 +11,7 @@
 
 static struct tcp_pcb *current_pcb;
 
-int dma_transfer_start();
+// int dma_transfer_start();
 #define psize (width)
 uint16_t buff[psize] = {};
 
@@ -25,7 +25,7 @@ err_t sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
   UNUSED(tpcb);
 
   buffer_release_bytes(len);
-  dma_transfer_start();
+//   dma_transfer_start();
   if (tcp_sndbuf(current_pcb) < width) {
     return 0;
   }
