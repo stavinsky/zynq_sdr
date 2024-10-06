@@ -10,6 +10,7 @@ cmake_minimum_required(VERSION 3.16)
 # Add any compiler definitions, they will be added as extra definitions
 # Example adding VERBOSE=1 will pass -DVERBOSE=1 to the compiler.
 set(USER_COMPILE_DEFINITIONS
+DEBUG=1
 )
 
 # Undefine any previously specified compiler definitions, either built in or provided with a -D option

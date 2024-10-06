@@ -31,9 +31,10 @@ void tcp_transfer() {
       return;
     }
     tcp_write(current_pcb, packet.buffer_ptr, packet.length,
-              1);
+              TCP_WRITE_FLAG_COPY | TCP_WRITE_FLAG_MORE);
     tcp_output(current_pcb);
   }
+//   tcp_output(current_pcb);
 }
 err_t sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
   UNUSED(arg);

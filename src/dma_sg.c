@@ -81,7 +81,6 @@ int Setup_ScatterGather_Rx() {
   int Status;
   RxRing = XAxiDma_GetRxRing(&AxiDma);
   //   int bdcount;
-  UINTPTR RxBufferPtr;
   // Create the RX BD ring
   /* Set delay and coalescing */
   // XAxiDma_BdRingSetCoalesce(RxRingPtr, Coalesce, Delay);
@@ -136,78 +135,76 @@ int Setup_ScatterGather_Rx() {
   return Status;
 }
 // Polling function to check for received data
-void PollRxRing() {
-  XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
-  XAxiDma_Bd *BdRxPtr, *BdRxPtrHead;
-  int NumBdProcessed;
-  int counter = 0;
-  // Poll RX Ring for completed BDs
-  while (1) {
-    NumBdProcessed = XAxiDma_BdRingFromHw(RxRingPtr, XAXIDMA_ALL_BDS, &BdRxPtr);
-    BdRxPtrHead = BdRxPtr;
-    if (NumBdProcessed > 0) {
-      xil_printf("number of processed %d\n", NumBdProcessed);
-      // Process received buffers
-      for (int i = 0; i < NumBdProcessed; i++) {
-        int bytes =
-            XAxiDma_BdGetActualLength(BdRxPtr, RxRingPtr->MaxTransferLen);
-        // xil_printf("Data received in buffer %d, %d bytes transferred to
-        // buffer\n", counter, bytes);
-        u32 ctrl_status = XAxiDma_BdGetSts(BdRxPtr);
-        if (ctrl_status & XAXIDMA_BD_STS_ALL_ERR_MASK) {
-          xil_printf("\nError detected in BD %d\n", i);
-        }
-        BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRingPtr, BdRxPtr);
-        counter += 1;
-      }
+// void PollRxRing() {
+//   XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
+//   XAxiDma_Bd *BdRxPtr, *BdRxPtrHead;
+//   int NumBdProcessed;
+//   int counter = 0;
+//   // Poll RX Ring for completed BDs
+//   while (1) {
+//     NumBdProcessed = XAxiDma_BdRingFromHw(RxRingPtr, XAXIDMA_ALL_BDS, &BdRxPtr);
+//     BdRxPtrHead = BdRxPtr;
+//     if (NumBdProcessed > 0) {
+//       xil_printf("number of processed %d\n", NumBdProcessed);
+//       // Process received buffers
+//       for (int i = 0; i < NumBdProcessed; i++) {
+//         int bytes =
+//             XAxiDma_BdGetActualLength(BdRxPtr, RxRingPtr->MaxTransferLen);
+//         // xil_printf("Data received in buffer %d, %d bytes transferred to
+//         // buffer\n", counter, bytes);
+//         u32 ctrl_status = XAxiDma_BdGetSts(BdRxPtr);
+//         if (ctrl_status & XAXIDMA_BD_STS_ALL_ERR_MASK) {
+//           xil_printf("\nError detected in BD %d\n", i);
+//         }
+//         BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRingPtr, BdRxPtr);
+//         counter += 1;
+//       }
 
-      u32 status = XAxiDma_BdRingFree(RxRingPtr, NumBdProcessed, BdRxPtrHead);
-      if (status != XST_SUCCESS) {
-        xil_printf("\n\nerror status is %d\n\n", status);
-      }
-      int free_bds = XAxiDma_BdRingGetFreeCnt(RxRingPtr);
-      u32 dma_status = XAxiDma_ReadReg(DMA_BASEADDR, 0x34);
-      xil_printf("free bds %d, dma_idle is %d counter = %d\n", free_bds,
-                 dma_status & 0b10, counter);
-    }
+//       u32 status = XAxiDma_BdRingFree(RxRingPtr, NumBdProcessed, BdRxPtrHead);
+//       if (status != XST_SUCCESS) {
+//         xil_printf("\n\nerror status is %d\n\n", status);
+//       }
+//       int free_bds = XAxiDma_BdRingGetFreeCnt(RxRingPtr);
+//       u32 dma_status = XAxiDma_ReadReg(DMA_BASEADDR, 0x34);
+//       xil_printf("free bds %d, dma_idle is %d counter = %d\n", free_bds,
+//                  dma_status & 0b10, counter);
+//     }
 
-    int free_bds = XAxiDma_BdRingGetFreeCnt(RxRingPtr);
-    u32 dma_status = XAxiDma_ReadReg(DMA_BASEADDR, 0x34);
-    if ((dma_status & 0b10) > 0 && free_bds == NUM_BUFFERS) {
-      //  xil_printf("dma finished\n");
-      restart_dma();
-    }
-  }
-}
+//     int free_bds = XAxiDma_BdRingGetFreeCnt(RxRingPtr);
+//     u32 dma_status = XAxiDma_ReadReg(DMA_BASEADDR, 0x34);
+//     if ((dma_status & 0b10) > 0 && free_bds == NUM_BUFFERS) {
+//       //  xil_printf("dma finished\n");
+//       restart_dma();
+//     }
+//   }
+// }
 
 DMAPacket get_buff() {
   DMAPacket packet;
   packet.length = 0;
   packet.buffer_ptr = NULL;
-  XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
+//   XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
   static XAxiDma_Bd *BdRxPtr = NULL;
-  static int bd_received = 0;
+//   static int bd_received = 0;
   static int bd_to_proccess = 0;
-  static int processed = 0;
-  while (bd_to_proccess <= 0) {
-    bd_received = XAxiDma_BdRingFromHw(RxRingPtr, XAXIDMA_ALL_BDS, &BdRxPtr);
-    bd_to_proccess = bd_received;
+  if (bd_to_proccess <= 0) {
+    bd_to_proccess = XAxiDma_BdRingFromHw(RxRing, XAXIDMA_ALL_BDS, &BdRxPtr);
+    if (bd_to_proccess <= 0) {
+        return packet;
+    } 
     // xil_printf("nuber of buffers %d\n", bd_received);
   }
 
-  if (bd_to_proccess > 0) {
     packet.length =
-        XAxiDma_BdGetActualLength(BdRxPtr, RxRingPtr->MaxTransferLen);
+        XAxiDma_BdGetActualLength(BdRxPtr, RxRing->MaxTransferLen);
     packet.buffer_ptr = (uint8_t *)(uintptr_t)XAxiDma_BdGetBufAddr(BdRxPtr);
     Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
     bd_to_proccess -= 1;
-    processed += 1;
-    XAxiDma_BdRingFree(RxRingPtr, 1, BdRxPtr);
-    BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRingPtr, BdRxPtr);
-    if ( XAxiDma_BdRingGetFreeCnt(RxRingPtr) == NUM_BUFFERS) {
+    XAxiDma_BdRingFree(RxRing, 1, BdRxPtr);
+    BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRing, BdRxPtr);
+    if ( XAxiDma_BdRingGetFreeCnt(RxRing) == NUM_BUFFERS) {
       restart_dma();
     }
-  }
 
   return packet;
 }
