@@ -11,6 +11,8 @@
 #include "tcp_setup.h"
 #include "tcp_callbacks.h"
 #include "xaxidma.h"
+#include "dma_sg.h"
+
 void tcp_fasttmr(void);
 void tcp_slowtmr(void);
 // int setup_dds_dma_and_interrupts(void);
@@ -39,10 +41,6 @@ int main() {
         return -1;
     }
 
-    // Poll for received data
-    PollRxRing();
-
-///
 
   status = tcp_init_and_dhcp();
   if (status != 0) {
@@ -65,8 +63,7 @@ int main() {
       TcpSlowTmrFlag = 0;
     }
     xemacif_input(echo_netif);
-    // dma_transfer_start();
-    // tcp_transfer();
+    tcp_transfer();
   }
 
   cleanup_platform();

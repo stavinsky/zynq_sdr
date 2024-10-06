@@ -3,26 +3,26 @@
 #include "xil_printf.h"
 #include "xparameters.h"
 #include "xscugic.h"
+#include <stdint.h>
 #include <xaxidma_bd.h>
 #include <xaxidma_bdring.h>
 #include <xaxidma_hw.h>
 #include <xil_types.h>
+#include "dma_sg.h"
 
 #define DMA_BASEADDR XPAR_AXI_DMA_0_BASEADDR // AXI DMA base address
 #define DMA_S2MM_BASEADDR                                                      \
   XPAR_AXIDMA_0_S2MM_BASEADDR // AXI DMA S2MM base address
 
-#define RX_BUFFER_SIZE 8192 // Size of each buffer in bytes
-#define NUM_BUFFERS 64        // Number of buffers (scatter-gather)
-
 XAxiDma AxiDma;
 XAxiDma_BdRing *RxRing;
-#define MEM_BASE_ADDR 0x01000000
-#define RX_BUFFER_BASE (MEM_BASE_ADDR + 0x00300000)
-#define RX_BUFFER_HIGH (MEM_BASE_ADDR + 0x004FFFFF)
-#define RX_BD_SPACE_BASE (MEM_BASE_ADDR + 0x00001000)
-#define RX_BD_SPACE_HIGH (MEM_BASE_ADDR + 0x00001FFF)
-u32 RxBuffer = RX_BUFFER_BASE;
+// #define MEM_BASE_ADDR 0x01000000
+// #define RX_BUFFER_BASE (MEM_BASE_ADDR + 0x00300000)
+// #define RX_BUFFER_HIGH (MEM_BASE_ADDR + 0x004FFFFF)
+// #define RX_BD_SPACE_BASE (MEM_BASE_ADDR + 0x00001000)
+// #define RX_BD_SPACE_HIGH (MEM_BASE_ADDR + 0x00001FFF)
+u32 RxBuffer[NUM_BUFFERS][RX_BUFFER_SIZE] __attribute__((aligned(32)));
+XAxiDma_Bd sg_descriptors[NUM_BUFFERS] __attribute__((aligned(XAXIDMA_BD_MINIMUM_ALIGNMENT)));
 
 XAxiDma_Bd BdTemplate;
 XAxiDma_Bd *BdPtr, *BdCurPtr;
@@ -79,16 +79,16 @@ int restart_dma() {
 int Setup_ScatterGather_Rx() {
   int Status;
   RxRing = XAxiDma_GetRxRing(&AxiDma);
-  int bdcount;
+//   int bdcount;
   UINTPTR RxBufferPtr;
   // Create the RX BD ring
   /* Set delay and coalescing */
   // XAxiDma_BdRingSetCoalesce(RxRingPtr, Coalesce, Delay);
-  bdcount = XAxiDma_BdRingCntCalc(XAXIDMA_BD_MINIMUM_ALIGNMENT,
-                                  RX_BD_SPACE_HIGH - RX_BD_SPACE_BASE + 1);
-  Status = XAxiDma_BdRingCreate(RxRing, (UINTPTR)RX_BD_SPACE_BASE,
-                                (UINTPTR)RX_BD_SPACE_BASE,
-                                XAXIDMA_BD_MINIMUM_ALIGNMENT, bdcount);
+//   bdcount = XAxiDma_BdRingCntCalc(XAXIDMA_BD_MINIMUM_ALIGNMENT,
+//                                   RX_BD_SPACE_HIGH - RX_BD_SPACE_BASE + 1);
+  Status = XAxiDma_BdRingCreate(RxRing, (UINTPTR)sg_descriptors,
+                                (UINTPTR)sg_descriptors,
+                                XAXIDMA_BD_MINIMUM_ALIGNMENT, NUM_BUFFERS);
   if (Status != XST_SUCCESS) {
     xil_printf("Error: Failed to create Rx ring\n");
     return XST_FAILURE;
@@ -110,46 +110,16 @@ int Setup_ScatterGather_Rx() {
     return XST_FAILURE;
   }
 
-  // Set up each BD to point to a buffer
-  //   BdCurPtr = BdPtr;
-  //   for (int i = 0; i < NUM_BUFFERS; i++) {
-  //     XAxiDma_BdSetBufAddr(BdCurPtr, (UINTPTR)&RxBuffer[i]);
-  //     XAxiDma_BdSetLength(BdCurPtr, RX_BUFFER_SIZE, RxRing->MaxTransferLen);
-  //     XAxiDma_BdSetCtrl(BdCurPtr, 0);
-  //     XAxiDma_BdSetId(BdCurPtr, &RxBuffer[i]);
-  //     BdCurPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRing, BdCurPtr);
-  //   }
-
-  BdCurPtr = BdPtr;
-  RxBufferPtr = RxBuffer;
-  for (int i = 0; i < FreeBDCount; i++) {
-    Status = XAxiDma_BdSetBufAddr(BdCurPtr, RxBufferPtr);
-
-    if (Status != XST_SUCCESS) {
-      xil_printf("Set buffer addr %x on BD %x failed %d\r\n",
-                 (unsigned int)RxBufferPtr, (UINTPTR)BdCurPtr, Status);
-
-      return XST_FAILURE;
+//   Set up each BD to point to a buffer
+    BdCurPtr = BdPtr;
+    for (int i = 0; i < NUM_BUFFERS; i++) {
+      XAxiDma_BdSetBufAddr(BdCurPtr, (UINTPTR)&RxBuffer[i]);
+      XAxiDma_BdSetLength(BdCurPtr, RX_BUFFER_SIZE, RxRing->MaxTransferLen);
+      XAxiDma_BdSetCtrl(BdCurPtr, 0);
+      XAxiDma_BdSetId(BdCurPtr, &RxBuffer[i]);
+      BdCurPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRing, BdCurPtr);
     }
 
-    Status =
-        XAxiDma_BdSetLength(BdCurPtr, RX_BUFFER_SIZE, RxRing->MaxTransferLen);
-    if (Status != XST_SUCCESS) {
-      xil_printf("Rx set length %d on BD %x failed %d\r\n", RX_BUFFER_SIZE,
-                 (UINTPTR)BdCurPtr, Status);
-
-      return XST_FAILURE;
-    }
-
-    /* Receive BDs do not need to set anything for the control
-     * The hardware will set the SOF/EOF bits per stream status
-     */
-    XAxiDma_BdSetCtrl(BdCurPtr, 0);
-    XAxiDma_BdSetId(BdCurPtr, RxBufferPtr);
-
-    RxBufferPtr += RX_BUFFER_SIZE;
-    BdCurPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRing, BdCurPtr);
-  }
 
   Status = XAxiDma_BdRingToHw(RxRing, NUM_BUFFERS, BdPtr);
   if (Status != XST_SUCCESS) {
@@ -206,4 +176,34 @@ void PollRxRing() {
       restart_dma();
     }
   }
+}
+
+DMAPacket get_buff() {
+    DMAPacket packet;
+    packet.length = 0;
+    packet.buffer_ptr = NULL;
+    XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
+    static XAxiDma_Bd *BdRxPtrHead = NULL;
+    static XAxiDma_Bd *BdRxPtr = NULL;
+    static int bd_received = 0;
+    static int bd_to_proccess = 0;
+
+    if (bd_to_proccess > 0) {
+        packet.length = XAxiDma_BdGetActualLength(BdRxPtr, RxRingPtr->MaxTransferLen);
+        packet.buffer_ptr = (uint8_t*) (uintptr_t)XAxiDma_BdGetBufAddr(BdRxPtr);
+        bd_to_proccess -= 1;
+        BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRingPtr, BdRxPtr);
+        return packet;
+    }
+    if (bd_received > 0 ) {
+        XAxiDma_BdRingFree(RxRingPtr, bd_received, BdRxPtrHead);
+    }
+    bd_received = XAxiDma_BdRingFromHw(RxRingPtr, XAXIDMA_ALL_BDS, &BdRxPtr);
+    bd_to_proccess = bd_received;
+    BdRxPtrHead = BdRxPtr; 
+
+    if(XAxiDma_BdRingGetFreeCnt(RxRingPtr) == NUM_BUFFERS) {
+        restart_dma();
+    }
+    return packet;
 }

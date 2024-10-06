@@ -8,48 +8,33 @@
 #include <string.h>
 #include <xil_cache.h>
 #include <xil_types.h>
+#include "dma_sg.h"
 
 static struct tcp_pcb *current_pcb;
 
 // int dma_transfer_start();
-#define psize (width)
-uint16_t buff[psize] = {};
+// #define psize (width)
+// uint16_t buff[psize] = {};
 
 void tcp_transfer() {
   if (!current_pcb) {
     return;
   }
+  if (tcp_sndbuf(current_pcb) < RX_BUFFER_SIZE) {
+    return;
+  }
+  DMAPacket packet = get_buff();
+  if (packet.length <= 0 ) {
+      return;
+  }
+  
+  tcp_write(current_pcb, packet.buffer_ptr, packet.length, TCP_WRITE_FLAG_COPY);
+  
 }
 err_t sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
   UNUSED(arg);
   UNUSED(tpcb);
 
-  buffer_release_bytes(len);
-//   dma_transfer_start();
-  if (tcp_sndbuf(current_pcb) < width) {
-    return 0;
-  }
-  buffer_read_result res = buffer_read();
-
-  if (!res.buffer) {
-    return 0;
-  }
-
-  Xil_DCacheInvalidateRange((UINTPTR)res.buffer, res.bytes);
-  tcp_write(current_pcb, res.buffer, res.bytes, TCP_WRITE_FLAG_COPY);
-
-  return ERR_OK;
-  if (tcp_sndbuf(current_pcb) < width) {
-    return 0;
-  }
-  res = buffer_read();
-
-  if (!res.buffer) {
-    return 0;
-  }
-
-  Xil_DCacheInvalidateRange((UINTPTR)res.buffer, res.bytes);
-  tcp_write(current_pcb, res.buffer, res.bytes, TCP_WRITE_FLAG_COPY);
 }
 
 err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
@@ -59,7 +44,6 @@ err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) 
     tcp_close(tpcb);
     tcp_recv(tpcb, NULL);
     current_pcb = NULL;
-    buffer_reset();
     return ERR_OK;
   }
 
@@ -89,7 +73,5 @@ err_t accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err) {
   tcp_arg(newpcb, (void *)(UINTPTR)connection);
   /* increment for subsequent accepted connections */
   connection++;
-  buffer_read_result res = buffer_read();
-  tcp_write(newpcb, res.buffer, res.bytes, TCP_WRITE_FLAG_COPY);
   return ERR_OK;
 }
