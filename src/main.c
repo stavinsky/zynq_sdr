@@ -3,8 +3,11 @@
 #include "platform_config.h"
 #include "xil_printf.h"
 #include "xparameters.h"
+#include <stdint.h>
 #include <stdio.h>
+#include <sys/_intsup.h>
 #include <xil_types.h>
+#include <xtimer_config.h>
 
 #include "lwip/dhcp.h"
 #include "lwip/tcp.h"
@@ -12,7 +15,7 @@
 #include "tcp_callbacks.h"
 #include "xaxidma.h"
 #include "dma_sg.h"
-
+#include "xiltimer.h"
 void tcp_fasttmr(void);
 void tcp_slowtmr(void);
 // int setup_dds_dma_and_interrupts(void);
@@ -27,7 +30,9 @@ int Init_DMA(void);
 
 int main() {
   int status = 0;
-
+ XTime start_time;
+ XTime stop_time;
+ XTime diff;
 ///
     // Initialize DMA
     if (Init_DMA() != XST_SUCCESS) {
@@ -42,6 +47,18 @@ int main() {
     }
 
 
+    // unsigned long long  i  = 0;
+    // const unsigned long long data_limit = (unsigned long long )1*1024*1024*1024; //1 gig
+    // XTime_GetTime(&start_time);
+    // while (i < data_limit) {
+    //     DMAPacket p = get_buff();
+    //     i += p.length;
+        
+    // }
+    // XTime_GetTime(&stop_time);
+    // diff = (stop_time - start_time);
+    // uint32_t diff_seconds = (unsigned int) ((1.0 * diff) / (COUNTS_PER_SECOND));
+    // xil_printf("time for operation is: %d\n", diff_seconds);
   status = tcp_init_and_dhcp();
   if (status != 0) {
     return status;

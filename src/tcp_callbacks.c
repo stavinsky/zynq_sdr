@@ -1,5 +1,7 @@
 #include "tcp_callbacks.h"
 #include "buffer/tcp_buffer.h"
+#include "dma_sg.h"
+#include "lwip/tcp.h"
 #include "lwip/tcpbase.h"
 #include "utils.h"
 #include "xil_printf.h"
@@ -8,36 +10,39 @@
 #include <string.h>
 #include <xil_cache.h>
 #include <xil_types.h>
-#include "dma_sg.h"
 
 static struct tcp_pcb *current_pcb;
 
 // int dma_transfer_start();
 // #define psize (width)
 // uint16_t buff[psize] = {};
-
+int sent_bytes = 0;
 void tcp_transfer() {
+
+  while (1) {
   if (!current_pcb) {
     return;
   }
-  if (tcp_sndbuf(current_pcb) < RX_BUFFER_SIZE) {
-    return;
-  }
-  DMAPacket packet = get_buff();
-  if (packet.length <= 0 ) {
+    if (tcp_sndbuf(current_pcb) < RX_BUFFER_SIZE) {
       return;
+    }
+    DMAPacket packet = get_buff();
+    if (packet.length <= 0) {
+      return;
+    }
+    tcp_write(current_pcb, packet.buffer_ptr, packet.length,
+              1);
+    tcp_output(current_pcb);
   }
-  
-  tcp_write(current_pcb, packet.buffer_ptr, packet.length, TCP_WRITE_FLAG_COPY);
-  
 }
 err_t sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
   UNUSED(arg);
   UNUSED(tpcb);
-
+  return ERR_OK;
 }
 
-err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p, err_t err) {
+err_t recv_callback(void *arg, struct tcp_pcb *tpcb, struct pbuf *p,
+                    err_t err) {
   UNUSED(arg);
   UNUSED(err);
   if (!p) {
@@ -73,5 +78,6 @@ err_t accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err) {
   tcp_arg(newpcb, (void *)(UINTPTR)connection);
   /* increment for subsequent accepted connections */
   connection++;
+  sent_bytes = 0;
   return ERR_OK;
 }
