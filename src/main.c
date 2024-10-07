@@ -80,7 +80,8 @@ int main() {
       TcpSlowTmrFlag = 0;
     }
     xemacif_input(echo_netif);
-    tcp_transfer();
+    // tcp_transfer();
+    udp_transfer();
   }
 
   cleanup_platform();
