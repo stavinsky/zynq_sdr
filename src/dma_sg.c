@@ -1,4 +1,5 @@
 #include "dma_sg.h"
+#include "assert.h"
 #include "lwip/err.h"
 #include "xaxidma.h"
 #include "xil_cache.h"
@@ -10,20 +11,16 @@
 #include <xaxidma_bdring.h>
 #include <xaxidma_hw.h>
 #include <xil_types.h>
-#include "assert.h"
 #define DMA_BASEADDR XPAR_AXI_DMA_0_BASEADDR // AXI DMA base address
-
 
 XAxiDma AxiDma;
 XAxiDma_BdRing *RxRing;
-// #define MEM_BASE_ADDR 0x01000000
-// #define RX_BUFFER_BASE (MEM_BASE_ADDR + 0x00300000)
-// #define RX_BUFFER_HIGH (MEM_BASE_ADDR + 0x004FFFFF)
-// #define RX_BD_SPACE_BASE (MEM_BASE_ADDR + 0x00001000)
-// #define RX_BD_SPACE_HIGH (MEM_BASE_ADDR + 0x00001FFF)
+
 u32 RxBuffer[NUM_BUFFERS][RX_BUFFER_SIZE] __attribute__((aligned(32)));
-XAxiDma_Bd sg_descriptors[NUM_BUFFERS]
-    __attribute__((aligned(XAXIDMA_BD_MINIMUM_ALIGNMENT)));
+
+BlockDescriptor sg_descriptors[NUM_BUFFERS];
+BlockDescriptor *first_descriptor = &sg_descriptors[0];
+BlockDescriptor *last_descriptor = &sg_descriptors[NUM_BUFFERS - 1];
 
 XAxiDma_Bd BdTemplate;
 XAxiDma_Bd *BdPtr, *BdCurPtr;
@@ -31,7 +28,7 @@ XAxiDma_Config *Config;
 
 int Init_DMA() {
   int Status;
-    // Xil_DCacheDisable();
+//   Xil_DCacheDisable();
   Config = XAxiDma_LookupConfig(DMA_BASEADDR);
   if (!Config) {
     xil_printf("No config found for %d\r\n", DMA_BASEADDR);
@@ -48,7 +45,8 @@ int Init_DMA() {
     xil_printf("Error: DMA is not in scatter-gather mode\n");
     return XST_FAILURE;
   }
-//   XAxiDma_WriteReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET , (255 << 15) | (255 << 23));
+  //   XAxiDma_WriteReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET ,
+  //   (255 << 15) | (255 << 23));
   return XST_SUCCESS;
 }
 
@@ -130,54 +128,47 @@ int Setup_ScatterGather_Rx() {
   return Status;
 }
 
-
 DMAPacket get_buff() {
   DMAPacket packet;
   packet.length = 0;
   packet.buffer_ptr = NULL;
   packet.status = XST_SUCCESS;
-  BlockDescriptor *bd;
-  //   XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
-  static XAxiDma_Bd *BdRxPtr = NULL;
-  //   static int bd_received = 0;
-  static int bd_to_proccess = 0;
-  if (bd_to_proccess <= 0) {
-    bd_to_proccess = XAxiDma_BdRingFromHw(RxRing, XAXIDMA_ALL_BDS, &BdRxPtr);
-    bd = BdRxPtr;
-    xil_printf("%x\n", bd->STATUS);
-    if (bd_to_proccess <= 0) {
-      u32 dma_status =
-          XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_SR_OFFSET);
-      volatile u32 dma_control = XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET);
-
-      if (dma_status & XAXIDMA_HALTED_MASK) {
-        xil_printf("dma_status: %x", dma_status);
-      }
-      if (dma_status & XAXIDMA_IDLE_MASK) {
-           volatile u32 cur = XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CDESC_OFFSET);
-           volatile u32 tail = XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_TDESC_OFFSET);
-        //    XAxiDma_WriteReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_TDESC_OFFSET, tail);
-           packet.status = XAxiDma_UpdateBdRingCDesc(RxRing);
-        //   packet.status = XAxiDma_BdRingStart(RxRing);
-      }
-      return packet;
-    }
-    // xil_printf("nuber of buffers %d\n", bd_received);
-  }
-  u32 bd_status = XAxiDma_BdGetSts(BdRxPtr);
-  if (bd_status & XAXIDMA_BD_STS_ALL_ERR_MASK) {
-    xil_printf("\nError detected in BD %x\n", bd_status);
+  AxiDmaRegisters *DMA = (AxiDmaRegisters *)DMA_BASEADDR;
+  static BlockDescriptor *current_bd = NULL;
+  if (current_bd == NULL) {
+    current_bd = first_descriptor;
   }
 
-  packet.length = XAxiDma_BdGetActualLength(BdRxPtr, RxRing->MaxTransferLen);
-  packet.buffer_ptr = (uint8_t *)(uintptr_t)XAxiDma_BdGetBufAddr(BdRxPtr);
-  Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
-  bd_to_proccess -= 1;
-  XAxiDma_BdRingFree(RxRing, 1, BdRxPtr);
-  BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRing, BdRxPtr);
-  if (XAxiDma_BdRingGetFreeCnt(RxRing) == NUM_BUFFERS) {
-    packet.status = restart_dma();
+  Xil_DCacheInvalidateRange((UINTPTR)current_bd, sizeof(BlockDescriptor));
+  if ((current_bd->STATUS & (1 << 31)) == 0) { // not completed
+    return packet;
   }
+  if ((UINTPTR)current_bd != DMA->S2MM_CURDESC) {
+    packet.buffer_ptr = (uint8_t *)(uintptr_t)current_bd->BUFFER_ADDRESS;
+    packet.length = current_bd->STATUS & 0x1ffffff;
+    current_bd -> STATUS &= 0x7fffffff; // reset complete status
+    current_bd = (BlockDescriptor *)(uintptr_t)current_bd->NXTDESC;
+    Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
+    return packet;
+  }
+  if ((DMA->S2MM_CURDESC == DMA->S2MM_TAILDESC) && (DMA->S2MM_DMASR & 1<<1)) { // curr = tail and status is idle 
+    packet.buffer_ptr = (uint8_t *)(uintptr_t)current_bd->BUFFER_ADDRESS;
+    packet.length = current_bd->STATUS & 0x1ffffff;
+    current_bd -> STATUS &= 0x7fffffff; // reset complete status
+
+    Xil_DCacheFlushRange((UINTPTR)sg_descriptors, sizeof(BlockDescriptor) * NUM_BUFFERS);
+    DMA->S2MM_CURDESC = (UINTPTR)first_descriptor;
+    DMA->S2MM_TAILDESC = (UINTPTR)last_descriptor;
+    current_bd = first_descriptor;
+    Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
+    return packet;
+    
+  }
+
+  //   packet.length = XAxiDma_BdGetActualLength(BdRxPtr,
+  //   RxRing->MaxTransferLen); packet.buffer_ptr = (uint8_t
+  //   *)(uintptr_t)XAxiDma_BdGetBufAddr(BdRxPtr);
+  //   Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
 
   return packet;
 }
