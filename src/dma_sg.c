@@ -1,4 +1,5 @@
 #include "dma_sg.h"
+#include "lwip/err.h"
 #include "xaxidma.h"
 #include "xil_cache.h"
 #include "xil_printf.h"
@@ -9,10 +10,9 @@
 #include <xaxidma_bdring.h>
 #include <xaxidma_hw.h>
 #include <xil_types.h>
-
+#include "assert.h"
 #define DMA_BASEADDR XPAR_AXI_DMA_0_BASEADDR // AXI DMA base address
-#define DMA_S2MM_BASEADDR                                                      \
-  XPAR_AXIDMA_0_S2MM_BASEADDR // AXI DMA S2MM base address
+
 
 XAxiDma AxiDma;
 XAxiDma_BdRing *RxRing;
@@ -31,7 +31,7 @@ XAxiDma_Config *Config;
 
 int Init_DMA() {
   int Status;
-//   Xil_DCacheDisable();
+    // Xil_DCacheDisable();
   Config = XAxiDma_LookupConfig(DMA_BASEADDR);
   if (!Config) {
     xil_printf("No config found for %d\r\n", DMA_BASEADDR);
@@ -48,7 +48,7 @@ int Init_DMA() {
     xil_printf("Error: DMA is not in scatter-gather mode\n");
     return XST_FAILURE;
   }
-
+//   XAxiDma_WriteReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET , (255 << 15) | (255 << 23));
   return XST_SUCCESS;
 }
 
@@ -80,12 +80,7 @@ int restart_dma() {
 int Setup_ScatterGather_Rx() {
   int Status;
   RxRing = XAxiDma_GetRxRing(&AxiDma);
-  //   int bdcount;
-  // Create the RX BD ring
-  /* Set delay and coalescing */
-  // XAxiDma_BdRingSetCoalesce(RxRingPtr, Coalesce, Delay);
-  //   bdcount = XAxiDma_BdRingCntCalc(XAXIDMA_BD_MINIMUM_ALIGNMENT,
-  //                                   RX_BD_SPACE_HIGH - RX_BD_SPACE_BASE + 1);
+
   Status = XAxiDma_BdRingCreate(RxRing, (UINTPTR)sg_descriptors,
                                 (UINTPTR)sg_descriptors,
                                 XAXIDMA_BD_MINIMUM_ALIGNMENT, NUM_BUFFERS);
@@ -134,77 +129,55 @@ int Setup_ScatterGather_Rx() {
   }
   return Status;
 }
-// Polling function to check for received data
-// void PollRxRing() {
-//   XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
-//   XAxiDma_Bd *BdRxPtr, *BdRxPtrHead;
-//   int NumBdProcessed;
-//   int counter = 0;
-//   // Poll RX Ring for completed BDs
-//   while (1) {
-//     NumBdProcessed = XAxiDma_BdRingFromHw(RxRingPtr, XAXIDMA_ALL_BDS, &BdRxPtr);
-//     BdRxPtrHead = BdRxPtr;
-//     if (NumBdProcessed > 0) {
-//       xil_printf("number of processed %d\n", NumBdProcessed);
-//       // Process received buffers
-//       for (int i = 0; i < NumBdProcessed; i++) {
-//         int bytes =
-//             XAxiDma_BdGetActualLength(BdRxPtr, RxRingPtr->MaxTransferLen);
-//         // xil_printf("Data received in buffer %d, %d bytes transferred to
-//         // buffer\n", counter, bytes);
-//         u32 ctrl_status = XAxiDma_BdGetSts(BdRxPtr);
-//         if (ctrl_status & XAXIDMA_BD_STS_ALL_ERR_MASK) {
-//           xil_printf("\nError detected in BD %d\n", i);
-//         }
-//         BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRingPtr, BdRxPtr);
-//         counter += 1;
-//       }
 
-//       u32 status = XAxiDma_BdRingFree(RxRingPtr, NumBdProcessed, BdRxPtrHead);
-//       if (status != XST_SUCCESS) {
-//         xil_printf("\n\nerror status is %d\n\n", status);
-//       }
-//       int free_bds = XAxiDma_BdRingGetFreeCnt(RxRingPtr);
-//       u32 dma_status = XAxiDma_ReadReg(DMA_BASEADDR, 0x34);
-//       xil_printf("free bds %d, dma_idle is %d counter = %d\n", free_bds,
-//                  dma_status & 0b10, counter);
-//     }
-
-//     int free_bds = XAxiDma_BdRingGetFreeCnt(RxRingPtr);
-//     u32 dma_status = XAxiDma_ReadReg(DMA_BASEADDR, 0x34);
-//     if ((dma_status & 0b10) > 0 && free_bds == NUM_BUFFERS) {
-//       //  xil_printf("dma finished\n");
-//       restart_dma();
-//     }
-//   }
-// }
 
 DMAPacket get_buff() {
   DMAPacket packet;
   packet.length = 0;
   packet.buffer_ptr = NULL;
-//   XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
+  packet.status = XST_SUCCESS;
+  BlockDescriptor *bd;
+  //   XAxiDma_BdRing *RxRingPtr = XAxiDma_GetRxRing(&AxiDma);
   static XAxiDma_Bd *BdRxPtr = NULL;
-//   static int bd_received = 0;
+  //   static int bd_received = 0;
   static int bd_to_proccess = 0;
   if (bd_to_proccess <= 0) {
     bd_to_proccess = XAxiDma_BdRingFromHw(RxRing, XAXIDMA_ALL_BDS, &BdRxPtr);
+    bd = BdRxPtr;
+    xil_printf("%x\n", bd->STATUS);
     if (bd_to_proccess <= 0) {
-        return packet;
-    } 
+      u32 dma_status =
+          XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_SR_OFFSET);
+      volatile u32 dma_control = XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET);
+
+      if (dma_status & XAXIDMA_HALTED_MASK) {
+        xil_printf("dma_status: %x", dma_status);
+      }
+      if (dma_status & XAXIDMA_IDLE_MASK) {
+           volatile u32 cur = XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CDESC_OFFSET);
+           volatile u32 tail = XAxiDma_ReadReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_TDESC_OFFSET);
+        //    XAxiDma_WriteReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_TDESC_OFFSET, tail);
+           packet.status = XAxiDma_UpdateBdRingCDesc(RxRing);
+        //   packet.status = XAxiDma_BdRingStart(RxRing);
+      }
+      return packet;
+    }
     // xil_printf("nuber of buffers %d\n", bd_received);
   }
+  u32 bd_status = XAxiDma_BdGetSts(BdRxPtr);
+  if (bd_status & XAXIDMA_BD_STS_ALL_ERR_MASK) {
+    xil_printf("\nError detected in BD %x\n", bd_status);
+  }
 
-    packet.length =
-        XAxiDma_BdGetActualLength(BdRxPtr, RxRing->MaxTransferLen);
-    packet.buffer_ptr = (uint8_t *)(uintptr_t)XAxiDma_BdGetBufAddr(BdRxPtr);
-    Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
-    bd_to_proccess -= 1;
-    XAxiDma_BdRingFree(RxRing, 1, BdRxPtr);
-    BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRing, BdRxPtr);
-    if ( XAxiDma_BdRingGetFreeCnt(RxRing) == NUM_BUFFERS) {
-      restart_dma();
-    }
+  packet.length = XAxiDma_BdGetActualLength(BdRxPtr, RxRing->MaxTransferLen);
+  packet.buffer_ptr = (uint8_t *)(uintptr_t)XAxiDma_BdGetBufAddr(BdRxPtr);
+  Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
+  bd_to_proccess -= 1;
+  XAxiDma_BdRingFree(RxRing, 1, BdRxPtr);
+  BdRxPtr = (XAxiDma_Bd *)XAxiDma_BdRingNext(RxRing, BdRxPtr);
+  if (XAxiDma_BdRingGetFreeCnt(RxRing) == NUM_BUFFERS) {
+    packet.status = restart_dma();
+  }
 
   return packet;
 }
