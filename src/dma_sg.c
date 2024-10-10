@@ -42,6 +42,7 @@ void dma_sg_start(){
 
 #define bd_clear_complete_status(bd) bd->STATUS &= 0x7fffffff // reset complete status
 #define bd_get_lengh(bd) (bd->STATUS & 0x1ffffff)
+
 DMAPacket get_buff() {
   DMAPacket packet;
   packet.length = 0;
