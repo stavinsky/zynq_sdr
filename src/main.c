@@ -47,18 +47,18 @@ int main() {
     }
 
 
-    // unsigned long long  i  = 0;
-    // const unsigned long long data_limit = (unsigned long long )1*1024*1024*1024; //1 gig
-    // XTime_GetTime(&start_time);
-    // while (i < data_limit) {
-    //     DMAPacket p = get_buff();
-    //     i += p.length;
+//     unsigned long long  i  = 0;
+//     const unsigned long long data_limit = (unsigned long long )1*1024*1024*1024; //1 gig
+//     XTime_GetTime(&start_time);
+//     while (i < data_limit) {
+//         DMAPacket p = get_buff();
+//         i += p.length;
         
-    // }
-    // XTime_GetTime(&stop_time);
-    // diff = (stop_time - start_time);
-    // uint32_t diff_seconds = (unsigned int) ((1.0 * diff) / (COUNTS_PER_SECOND));
-    // xil_printf("time for operation is: %d\n", diff_seconds);
+//     }
+//     XTime_GetTime(&stop_time);
+//     diff = (stop_time - start_time);
+//     uint32_t diff_seconds = (unsigned int) ((1.0 * diff) / (COUNTS_PER_SECOND));
+//     xil_printf("time for operation is: %d\n", diff_seconds);
   status = tcp_init_and_dhcp();
   if (status != 0) {
     return status;

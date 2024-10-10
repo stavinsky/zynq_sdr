@@ -19,7 +19,7 @@ static struct tcp_pcb *current_pcb;
 int sent_bytes = 0;
 void tcp_transfer() {
 
-  while (1) {
+//   while (1) {
   if (!current_pcb) {
     return;
   }
@@ -31,9 +31,9 @@ void tcp_transfer() {
       return;
     }
     tcp_write(current_pcb, packet.buffer_ptr, packet.length,
-              TCP_WRITE_FLAG_COPY | TCP_WRITE_FLAG_MORE);
+               0);
     tcp_output(current_pcb);
-  }
+//   }
 //   tcp_output(current_pcb);
 }
 err_t sent_callback(void *arg, struct tcp_pcb *tpcb, u16_t len) {
@@ -73,7 +73,7 @@ err_t accept_callback(void *arg, struct tcp_pcb *newpcb, err_t err) {
   current_pcb = newpcb;
   /* set the receive callback for this connection */
   tcp_recv(newpcb, recv_callback);
-  tcp_sent(newpcb, sent_callback);
+//   tcp_sent(newpcb, sent_callback);
   /* just use an integer number indicating the connection id as the
      callback argument */
   tcp_arg(newpcb, (void *)(UINTPTR)connection);

@@ -28,7 +28,6 @@ XAxiDma_Config *Config;
 
 int Init_DMA() {
   int Status;
-//   Xil_DCacheDisable();
   Config = XAxiDma_LookupConfig(DMA_BASEADDR);
   if (!Config) {
     xil_printf("No config found for %d\r\n", DMA_BASEADDR);
@@ -40,40 +39,14 @@ int Init_DMA() {
     return XST_FAILURE;
   }
 
-  // Ensure the DMA is in scatter-gather mode
   if (!XAxiDma_HasSg(&AxiDma)) {
     xil_printf("Error: DMA is not in scatter-gather mode\n");
     return XST_FAILURE;
   }
-  //   XAxiDma_WriteReg(DMA_BASEADDR, XAXIDMA_RX_OFFSET + XAXIDMA_CR_OFFSET ,
-  //   (255 << 15) | (255 << 23));
   return XST_SUCCESS;
 }
 
-int restart_dma() {
-  int status = 0;
 
-  status = XAxiDma_BdRingAlloc(RxRing, NUM_BUFFERS, &BdPtr);
-  if (status != XST_SUCCESS) {
-    xil_printf("Error: Failed to allocate BDs\n");
-    return XST_FAILURE;
-  }
-  // Submit the BDs to the RX channel
-  status = XAxiDma_BdRingToHw(RxRing, NUM_BUFFERS, BdPtr);
-  if (status != XST_SUCCESS) {
-    xil_printf("Error: Failed to submit BDs to HW\n");
-    return XST_FAILURE;
-  }
-
-  // Start the RX DMA channel
-  status = XAxiDma_BdRingStart(RxRing);
-  if (status != XST_SUCCESS) {
-    xil_printf("Error: Failed to start RX ring\n");
-    return XST_FAILURE;
-  }
-
-  return XST_SUCCESS;
-}
 
 int Setup_ScatterGather_Rx() {
   int Status;
@@ -127,6 +100,7 @@ int Setup_ScatterGather_Rx() {
   }
   return Status;
 }
+#define bd_clear_complete_status(bd) bd->STATUS &= 0x7fffffff; // reset complete status
 
 DMAPacket get_buff() {
   DMAPacket packet;
@@ -135,22 +109,35 @@ DMAPacket get_buff() {
   packet.status = XST_SUCCESS;
   AxiDmaRegisters *DMA = (AxiDmaRegisters *)DMA_BASEADDR;
   static BlockDescriptor *current_bd = NULL;
+  static int free_num = 0;
   if (current_bd == NULL) {
     current_bd = first_descriptor;
   }
-
+  // TODO check if dma is halted and return an error;
   Xil_DCacheInvalidateRange((UINTPTR)current_bd, sizeof(BlockDescriptor));
-  if ((current_bd->STATUS & (1 << 31)) == 0) { // not completed
-    return packet;
-  }
+  Xil_DCacheInvalidateRange((UINTPTR)DMA, sizeof(AxiDmaRegisters));
+
+  while  ((current_bd->STATUS & (1 << 31)) == 0) {
+    Xil_DCacheInvalidateRange((UINTPTR)current_bd, sizeof(BlockDescriptor));
+      Xil_DCacheInvalidateRange((UINTPTR)DMA, sizeof(AxiDmaRegisters));
+  };
   if ((UINTPTR)current_bd != DMA->S2MM_CURDESC) {
     packet.buffer_ptr = (uint8_t *)(uintptr_t)current_bd->BUFFER_ADDRESS;
     packet.length = current_bd->STATUS & 0x1ffffff;
-    current_bd -> STATUS &= 0x7fffffff; // reset complete status
+    bd_clear_complete_status(current_bd);
+    u32 cache_bd = (UINTPTR) current_bd;
+    Xil_DCacheFlushRange((UINTPTR)current_bd, sizeof(BlockDescriptor));
     current_bd = (BlockDescriptor *)(uintptr_t)current_bd->NXTDESC;
     Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
+    if (++free_num >=100 ) {
+        DMA->S2MM_TAILDESC = cache_bd;
+        Xil_DCacheFlushRange((UINTPTR)DMA, sizeof(AxiDmaRegisters));
+        free_num = 0;     
+    } 
     return packet;
   }
+  // normally this code is not accessable because we moving the tail while reading 
+  // needs to be additionaly tested to be sure
   if ((DMA->S2MM_CURDESC == DMA->S2MM_TAILDESC) && (DMA->S2MM_DMASR & 1<<1)) { // curr = tail and status is idle 
     packet.buffer_ptr = (uint8_t *)(uintptr_t)current_bd->BUFFER_ADDRESS;
     packet.length = current_bd->STATUS & 0x1ffffff;
@@ -159,16 +146,13 @@ DMAPacket get_buff() {
     Xil_DCacheFlushRange((UINTPTR)sg_descriptors, sizeof(BlockDescriptor) * NUM_BUFFERS);
     DMA->S2MM_CURDESC = (UINTPTR)first_descriptor;
     DMA->S2MM_TAILDESC = (UINTPTR)last_descriptor;
+    Xil_DCacheFlushRange((UINTPTR)DMA, sizeof(AxiDmaRegisters));
     current_bd = first_descriptor;
     Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
+    free_num = 0;
     return packet;
     
   }
-
-  //   packet.length = XAxiDma_BdGetActualLength(BdRxPtr,
-  //   RxRing->MaxTransferLen); packet.buffer_ptr = (uint8_t
-  //   *)(uintptr_t)XAxiDma_BdGetBufAddr(BdRxPtr);
-  //   Xil_DCacheInvalidateRange((UINTPTR)packet.buffer_ptr, packet.length);
 
   return packet;
 }
