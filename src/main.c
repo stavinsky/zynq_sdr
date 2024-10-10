@@ -35,17 +35,17 @@ int main() {
  XTime diff;
 ///
     // Initialize DMA
-    if (Init_DMA() != XST_SUCCESS) {
-        xil_printf("Failed to initialize DMA\n");
-        return -1;
-    }
+    // if (Init_DMA() != XST_SUCCESS) {
+    //     xil_printf("Failed to initialize DMA\n");
+    //     return -1;
+    // }
 
     // Setup scatter-gather RX
-    if (Setup_ScatterGather_Rx() != XST_SUCCESS) {
-        xil_printf("Failed to set up scatter-gather RX\n");
-        return -1;
-    }
-
+    // if (Setup_ScatterGather_Rx() != XST_SUCCESS) {
+    //     xil_printf("Failed to set up scatter-gather RX\n");
+    //     return -1;
+    // }
+    dma_sg_start();
 
 //     unsigned long long  i  = 0;
 //     const unsigned long long data_limit = (unsigned long long )1*1024*1024*1024; //1 gig

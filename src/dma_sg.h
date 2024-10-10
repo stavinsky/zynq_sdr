@@ -13,9 +13,8 @@ typedef struct {
 
 DMAPacket get_buff(void);
 
-int Setup_ScatterGather_Rx(void);
-int Init_DMA(void);
-#define RX_BUFFER_SIZE (1024) // Size of each buffer in bytes
+void dma_sg_start(void);
+#define RX_BUFFER_SIZE (8192) // Size of each buffer in bytes
 #define NUM_BUFFERS  256       // Number of buffers (scatter-gather)
 
 typedef  struct {
